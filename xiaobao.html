@@ -1,0 +1,666 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b1020">
+<meta name="format-detection" content="telephone=no">
+<title>生日礼物抽奖 · API 额度</title>
+<style>
+  :root{
+    --bg:#080c18;
+    --card:rgba(255,255,255,.055);
+    --line:rgba(255,255,255,.12);
+    --gold:#ffd479;
+    --gold2:#ffb03a;
+    --mint:#5ee7c4;
+    --text:#f2f6ff;
+    --dim:#9aa6c4;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(120% 60% at 50% -10%, #1d2b52 0%, rgba(29,43,82,0) 60%),
+      radial-gradient(90% 50% at 100% 100%, #123a3a 0%, rgba(18,58,58,0) 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;
+    padding:calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
+    user-select:none;-webkit-user-select:none;
+  }
+  /* 背景泡泡 */
+  .bubbles{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+  .bubbles i{
+    position:absolute;bottom:-60px;display:block;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.34),rgba(120,200,255,.09) 55%,rgba(255,255,255,0) 70%);
+    border:1px solid rgba(255,255,255,.07);
+    animation:rise linear infinite;
+  }
+  @keyframes rise{
+    0%{transform:translate3d(0,0,0) scale(.85);opacity:0}
+    12%{opacity:.85}
+    100%{transform:translate3d(14px,-112vh,0) scale(1.15);opacity:0}
+  }
+  .wrap{position:relative;z-index:1;width:100%;max-width:430px;display:flex;flex-direction:column;align-items:center}
+
+  .kicker{
+    font-size:12px;letter-spacing:.24em;color:var(--gold);opacity:.9;
+    text-transform:uppercase;margin:2px 0 8px;
+  }
+  h1{
+    font-size:25px;line-height:1.28;margin:0 0 8px;text-align:center;font-weight:800;
+    background:linear-gradient(100deg,#fff 10%,var(--gold) 48%,#ff9ecb 92%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{font-size:13.5px;color:var(--dim);text-align:center;line-height:1.6;margin:0 0 4px;max-width:330px}
+  .sub b{color:#dfe7ff;font-weight:600}
+
+  /* 转盘 */
+  .stage{
+    position:relative;width:min(88vw,336px);height:min(88vw,336px);margin:18px 0 6px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .glow{
+    position:absolute;inset:-14%;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%,rgba(255,196,90,.20),rgba(94,231,196,.10) 45%,rgba(0,0,0,0) 68%);
+    filter:blur(6px);
+  }
+  .ring{
+    position:absolute;inset:-9px;border-radius:50%;
+    background:conic-gradient(from 0deg,#ffd479,#ff9ecb,#5ee7c4,#7aa8ff,#ffd479);
+    opacity:.55;filter:blur(10px);
+  }
+  #wheel{position:relative;width:100%;height:100%;border-radius:50%;display:block;
+    box-shadow:0 0 0 3px rgba(255,255,255,.09), 0 0 0 9px rgba(8,12,24,.85), 0 22px 50px -18px rgba(0,0,0,.9);
+  }
+  .pin{
+    position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;
+    border-top:26px solid var(--gold);
+    filter:drop-shadow(0 3px 8px rgba(255,180,60,.7));z-index:3;
+  }
+  .hub{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:31%;height:31%;border-radius:50%;border:0;cursor:pointer;
+    background:linear-gradient(160deg,#fff7e2,#ffcf72 58%,#f79b23);
+    color:#3a2405;font-family:inherit;
+    box-shadow:0 8px 22px -6px rgba(255,170,50,.75),inset 0 -3px 8px rgba(160,90,0,.25),inset 0 3px 6px rgba(255,255,255,.8);
+    display:grid;place-items:center;gap:0;line-height:1;
+    transition:transform .12s ease, box-shadow .2s ease;
+    z-index:4;
+  }
+  .hub:active{transform:translate(-50%,-50%) scale(.95)}
+  .hub .t{font-size:19px;font-weight:900;letter-spacing:.06em}
+  .hub .s{font-size:9px;letter-spacing:.16em;opacity:.62;margin-top:4px}
+  .hub[disabled]{filter:saturate(.55) brightness(.92)}
+
+  .hint{
+    font-size:12px;color:#6f7b9c;letter-spacing:.06em;margin:10px 0 0;
+    animation:breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* 结果卡 */
+  .result{
+    display:none;
+    width:100%;margin-top:14px;border-radius:22px;padding:20px 18px 18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.085),rgba(255,255,255,.03));
+    border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    text-align:center;opacity:0;transform:translateY(14px) scale(.97);pointer-events:none;
+    transition:opacity .42s ease,transform .42s cubic-bezier(.2,1.3,.4,1);
+    box-shadow:0 24px 60px -30px rgba(0,0,0,.9);
+  }
+  .result.show{display:block;opacity:1;transform:none;pointer-events:auto}
+  .result .tag{font-size:11.5px;letter-spacing:.2em;color:var(--mint);margin-bottom:8px}
+  .result .amt{
+    font-size:52px;font-weight:900;line-height:1;letter-spacing:-.02em;
+    background:linear-gradient(96deg,#fff,var(--gold) 60%,#ffb03a);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .result .amt small{font-size:24px;font-weight:800;margin-right:2px}
+  .result .tk{margin-top:10px;font-size:15.5px;color:#dfe7ff}
+  .result .tk b{color:var(--mint);font-size:19px;font-weight:800}
+  .result .note{font-size:11px;color:var(--dim);margin-top:9px;line-height:1.65}
+  .result .note b{color:#c3cde8;font-weight:600}
+
+  .custom{margin-top:14px;display:none}
+  .custom.on{display:block}
+  .custom label{display:block;font-size:12px;color:var(--dim);margin-bottom:7px}
+  .field{display:flex;gap:8px;align-items:center;justify-content:center}
+  .field span{font-size:20px;color:var(--gold);font-weight:800}
+  .field input{
+    width:132px;padding:11px 12px;border-radius:12px;text-align:center;
+    background:rgba(255,255,255,.07);border:1px solid var(--line);
+    color:#fff;font-size:18px;font-weight:700;font-family:inherit;outline:none;
+    -webkit-appearance:none;appearance:none;
+  }
+  .field input:focus{border-color:rgba(255,212,121,.6);background:rgba(255,255,255,.1)}
+  .field button{
+    padding:11px 16px;border-radius:12px;border:1px solid rgba(255,212,121,.45);
+    background:rgba(255,180,60,.16);color:var(--gold);font-family:inherit;
+    font-size:14px;font-weight:700;cursor:pointer;
+  }
+  .field button:active{transform:scale(.96)}
+
+  .actions{display:flex;gap:10px;width:100%;margin-top:16px}
+  .btn{
+    flex:1;padding:15px 8px;border-radius:16px;border:1px solid var(--line);
+    background:rgba(255,255,255,.06);color:var(--text);font-family:inherit;
+    font-size:15px;font-weight:700;cursor:pointer;transition:transform .1s ease,background .2s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.primary{
+    background:linear-gradient(160deg,#ffe6ad,#ffc94f 55%,#f59b19);
+    color:#3a2405;border-color:transparent;
+    box-shadow:0 14px 30px -14px rgba(255,180,60,.8);
+  }
+  .btn.ghost{flex:0 0 108px;font-size:13.5px;color:var(--dim)}
+
+  .fair{
+    margin-top:20px;width:100%;border-top:1px solid rgba(255,255,255,.08);padding-top:14px;
+    font-size:11.5px;line-height:1.85;color:#7f8bab;text-align:left;
+  }
+  .fair b{color:#a9b6d6;font-weight:600}
+  .fair .t{display:block;font-size:11px;letter-spacing:.2em;color:#66718f;margin-bottom:6px}
+
+  .toast{
+    position:fixed;left:50%;bottom:calc(38px + env(safe-area-inset-bottom));transform:translate(-50%,20px);
+    background:rgba(16,22,38,.96);border:1px solid rgba(255,255,255,.16);color:#e8eeff;
+    padding:11px 20px;border-radius:100px;font-size:13.5px;font-weight:600;
+    opacity:0;pointer-events:none;transition:all .28s ease;z-index:99;white-space:nowrap;
+    box-shadow:0 18px 40px -18px #000;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  #fx{position:fixed;inset:0;pointer-events:none;z-index:60}
+  @media (max-height:700px){ .stage{width:min(80vw,290px);height:min(80vw,290px);margin-top:12px} h1{font-size:22px} }
+</style>
+</head>
+<body>
+<div class="bubbles" id="bubbles" aria-hidden="true"></div>
+
+<div class="wrap">
+  <div class="kicker">Birthday Draw · 🐳</div>
+  <h1>小宝，抽一个吧<br>抽到多少就给我充多少</h1>
+  <p class="sub">七格里六格是充值档位，一格是<b>「你说了算」</b>。<br>抽完把结果发回给我就行～</p>
+
+  <div class="stage">
+    <div class="glow"></div>
+    <div class="ring"></div>
+    <canvas id="wheel" width="672" height="672"></canvas>
+    <div class="pin"></div>
+    <button class="hub" id="hub" aria-label="开始抽奖">
+      <span class="t" id="hubT">开始</span>
+      <span class="s">抽奖</span>
+    </button>
+  </div>
+
+  <p class="hint" id="hint">轻点中间的「开始」· 转个五秒出结果</p>
+
+  <div class="result" id="result">
+    <div class="tag" id="rTag">抽到啦</div>
+    <div class="amt" id="rAmt"><small>¥</small>50</div>
+    <div class="tk" id="rTk">≈ <b>625</b> 万 tokens</div>
+    <div class="custom" id="custom">
+      <label>想充多少？（整数就好）</label>
+      <div class="field">
+        <span>¥</span>
+        <input id="amtIn" type="tel" inputmode="numeric" placeholder="比如 88" maxlength="6">
+        <button id="amtOk">就这个</button>
+      </div>
+    </div>
+    <div class="note" id="rNote">
+      按 <b>deepseek-flash 输出价 ¥8/百万 tokens</b> 粗估，空闲时段（4 元）能翻倍 ✨
+    </div>
+  </div>
+
+  <div class="actions" id="actions" style="display:none">
+    <button class="btn primary" id="copyBtn">复制结果发给我</button>
+    <button class="btn ghost" id="againBtn">再抽</button>
+  </div>
+
+  <div class="fair">
+    <span class="t">RULES</span>
+    <b>·</b> 七个档位概率完全相同，没有暗改，没有内定。<br>
+    <b>·</b> 抽到「自定义」就由你自己填金额，填多少我都认。<br>
+    <b>·</b> token 数是按 <b>¥8 / 百万 tokens</b>（deepseek-flash 高峰输出价）换算的，只是让人有实感，不是官方套餐。
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<canvas id="fx"></canvas>
+
+<script>
+(function(){
+  'use strict';
+
+  var PRIZE_PER_MTOK = 8;              // 元 / 百万 tokens（deepseek-flash 高峰输出价）
+  var SEGMENTS = [
+    {label:'¥5',   amount:5,   c1:'#2a3560', c2:'#1d2748', ink:'#dbe4ff'},
+    {label:'¥10',  amount:10,  c1:'#3a2d5e', c2:'#2a2046', ink:'#e6dcff'},
+    {label:'¥20',  amount:20,  c1:'#20404a', c2:'#17323a', ink:'#c9f5ea'},
+    {label:'¥30',  amount:30,  c1:'#4a3320', c2:'#38260f', ink:'#ffe7bd'},
+    {label:'¥50',  amount:50,  c1:'#243a5c', c2:'#1a2946', ink:'#d8e6ff'},
+    {label:'¥100', amount:100, c1:'#4a2440', c2:'#371a2f', ink:'#ffd9ec'},
+    {label:'自定义', amount:null, c1:'#15423a', c2:'#0e2f2a', ink:'#9df2d9'}
+  ];
+
+  var cv = document.getElementById('wheel');
+  var ctx = cv.getContext('2d');
+  var hub = document.getElementById('hub');
+  var resultEl = document.getElementById('result');
+  var actionsEl = document.getElementById('actions');
+  var rAmt = document.getElementById('rAmt');
+  var rTk = document.getElementById('rTk');
+  var rNote = document.getElementById('rNote');
+  var rTag = document.getElementById('rTag');
+  var customEl = document.getElementById('custom');
+  var amtIn = document.getElementById('amtIn');
+  var amtOk = document.getElementById('amtOk');
+  var toastEl = document.getElementById('toast');
+
+  var N = SEGMENTS.length;
+  var SEG = Math.PI * 2 / N;
+  var rot = Math.PI * 2 / 7 * 0.75;   // 初始错开，指针不正对分隔线，档位文字也不会竖在正上方
+  var spinning = false;
+  var current = null;       // {label, amount}
+  var rafId = null;
+
+  /* ---------- 画转盘 ---------- */
+  function draw(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    var css = cv.clientWidth || 320;
+    if (cv.width !== Math.round(css * dpr)) {
+      cv.width = Math.round(css * dpr);
+      cv.height = Math.round(css * dpr);
+    }
+    var S = cv.width;
+    var R = S / 2;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,S,S);
+
+    // 外圈
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(R,R,R-1,0,Math.PI*2);
+    var rim = ctx.createLinearGradient(0,0,S,S);
+    rim.addColorStop(0,'#3b4670'); rim.addColorStop(.5,'#1a2138'); rim.addColorStop(1,'#3b4670');
+    ctx.fillStyle = rim;
+    ctx.fill();
+    ctx.restore();
+
+    var pad = S * 0.028;
+    var r2 = R - pad;
+
+    for (var i=0;i<N;i++){
+      var a0 = i*SEG + rot - Math.PI/2 - SEG/2;
+      var a1 = a0 + SEG;
+
+      var g = ctx.createLinearGradient(
+        R + Math.cos(a0)*r2, R + Math.sin(a0)*r2,
+        R + Math.cos(a1)*r2, R + Math.sin(a1)*r2
+      );
+      var seg = SEGMENTS[i];
+      g.addColorStop(0, seg.c1); g.addColorStop(1, seg.c2);
+
+      ctx.beginPath();
+      ctx.moveTo(R,R);
+      ctx.arc(R,R,r2,a0,a1);
+      ctx.closePath();
+      ctx.fillStyle = g;
+      ctx.fill();
+
+      // 分隔线
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,.15)';
+      ctx.lineWidth = Math.max(1, dpr * 0.9);
+      ctx.beginPath();
+      ctx.moveTo(R + Math.cos(a0)*r2*0.30, R + Math.sin(a0)*r2*0.30);
+      ctx.lineTo(R + Math.cos(a0)*r2, R + Math.sin(a0)*r2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 文字（左半边翻转 180°，保证永远正着读）
+      var mid = a0 + SEG/2;
+      var flipped = Math.cos(mid) < 0;
+      var sign = flipped ? 1 : -1;
+
+      ctx.save();
+      ctx.translate(R,R);
+      ctx.rotate(mid);
+      if (flipped) ctx.rotate(Math.PI);
+
+      var edge = r2 * 0.93;
+      var bx = flipped ? -edge : edge;
+      ctx.textAlign = flipped ? 'left' : 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = seg.ink;
+      ctx.shadowColor = 'rgba(0,0,0,.42)';
+      ctx.shadowBlur = 4 * dpr * 0.5;
+
+      var fs = S * (seg.amount === null ? 0.066 : 0.072);
+      ctx.font = '800 ' + fs.toFixed(1) + 'px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(seg.label, bx, sign * S * 0.020);
+
+      if (seg.amount !== null){
+        ctx.shadowBlur = 0;
+        ctx.font = '600 ' + (S*0.028).toFixed(1) + 'px -apple-system,"PingFang SC",sans-serif';
+        ctx.globalAlpha = .82;
+        ctx.fillText(fmtWan(seg.amount) + ' tokens', bx, sign * -S * 0.056);
+      }
+      ctx.restore();
+    }
+
+    // 内圈装饰
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(R,R,r2*0.315,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(8,12,24,.55)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.10)';
+    ctx.lineWidth = Math.max(1,dpr);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ---------- token 换算 ---------- */
+  function fmtWan(yuan){
+    var mtok = yuan / PRIZE_PER_MTOK;          // 百万 tokens
+    var wan = mtok * 100;                       // 万 tokens
+    if (wan >= 10000){
+      var yi = wan / 10000;
+      return (Math.round(yi * 100) / 100) + ' 亿';
+    }
+    return Math.round(wan) + ' 万';
+  }
+  function fmtYuan(v){ return String(Math.round(v)); }
+
+  /* ---------- 抽奖 ---------- */
+  function pick(){
+    return Math.floor(Math.random() * N);
+  }
+
+  function spin(){
+    if (spinning) return;
+    spinning = true;
+    idleDone = true; clearTimeout(idleTimer);
+    hub.disabled = true;
+    document.getElementById('hubT').textContent = '转…';
+    resultEl.classList.remove('show');
+    resultEl.style.display = 'none';
+    actionsEl.style.display = 'none';
+    customEl.classList.remove('on');
+
+    var idx = pick();
+    // 指针在正上方：让 idx 号扇区的中心停在指针下，即 rot ≡ -idx*SEG
+    var targetMod = (( (-(idx * SEG)) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+
+    var curMod = ((rot % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    var delta = targetMod - curMod;
+    if (delta < 0) delta += Math.PI*2;
+
+    var turns = 6 + Math.floor(Math.random()*2);   // 6~7 整圈
+    var from = rot;
+    var to = rot + turns * Math.PI*2 + delta
+             + (Math.random()*0.5 - 0.25) * SEG * 0.5; // 不总是正中心
+    var dur = 5200 + Math.random()*700;
+    var t0 = performance.now();
+
+    var lastTick = 0;
+
+    function frame(now){
+      var p = Math.min((now - t0) / dur, 1);
+      // easeOutQuint
+      var e = 1 - Math.pow(1 - p, 5);
+      rot = from + (to - from) * e;
+      draw();
+
+      // 刻度音
+      var tick = Math.floor((rot - from) / SEG);
+      if (tick !== lastTick){
+        lastTick = tick;
+        if (p < 0.93) blip(660 + Math.random()*90, 0.035, 0.05);
+      }
+
+      if (p < 1){
+        rafId = requestAnimationFrame(frame);
+      } else {
+        spinning = false;
+        hub.disabled = false;
+        document.getElementById('hubT').textContent = '再来';
+        // 用最终角度反推真实的获奖扇区（保证显示与转盘一致）
+        var landed = landedIndex();
+        show(landed);
+      }
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function landedIndex(){
+    // 指针在正上方：canvas 角度 -PI/2
+    var pointer = -Math.PI/2;
+    var local = pointer - rot + Math.PI/2 + SEG/2;  // 抵消绘制的 -PI/2 - SEG/2 偏移
+    local = ((local % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    return Math.floor(local / SEG) % N;
+  }
+
+  function show(idx){
+    var seg = SEGMENTS[idx];
+    current = {label: seg.label, amount: seg.amount};
+    var hintEl = document.getElementById('hint');
+    if (hintEl) hintEl.style.display = 'none';
+    resultEl.style.display = 'block';
+    resultEl.classList.remove('show');
+    void resultEl.offsetHeight;
+    requestAnimationFrame(function(){ resultEl.classList.add('show'); });
+    rTag.textContent = seg.amount === null ? '你说了算' : '抽到啦';
+
+    if (seg.amount === null){
+      rAmt.innerHTML = '<small>¥</small>?';
+      rTk.innerHTML = '金额你来定，<b>多少我都接</b>';
+      rNote.innerHTML = '填好后点「就这个」，token 会按 <b>¥8/百万</b> 当场算出来。';
+      customEl.classList.add('on');
+      actionsEl.style.display = 'flex';
+      setTimeout(function(){ amtIn.focus(); }, 320);
+    } else {
+      rAmt.innerHTML = '<small>¥</small>' + fmtYuan(seg.amount);
+      rTk.innerHTML = '≈ <b>' + fmtWan(seg.amount) + '</b> tokens';
+      rNote.innerHTML = '按 <b>deepseek-flash 输出价 ¥8/百万 tokens</b> 粗估<br>空闲时段（4 元 / 百万）还能翻倍 ✨';
+      customEl.classList.remove('on');
+      actionsEl.style.display = 'flex';
+    }
+    burst();
+    fanfare();
+    if (navigator.vibrate) { try{ navigator.vibrate([18,60,26]); }catch(e){} }
+  }
+
+  /* ---------- 自定义金额 ---------- */
+  amtOk.addEventListener('click', function(){
+    var v = parseFloat(String(amtIn.value).replace(/[^\d.]/g,''));
+    if (!v || v <= 0){ toast('填个大于 0 的数嘛～'); return; }
+    v = Math.min(Math.round(v), 999999);
+    current = {label: '¥' + v, amount: v};
+    rTag.textContent = '你自己定的';
+    rAmt.innerHTML = '<small>¥</small>' + fmtYuan(v);
+    rTk.innerHTML = '≈ <b>' + fmtWan(v) + '</b> tokens';
+    rNote.innerHTML = '这是你自己定的金额 · 按 <b>¥8/百万 tokens</b> 换算';
+    customEl.classList.remove('on');
+    burst(); fanfare();
+  });
+  amtIn.addEventListener('keydown', function(e){ if (e.key === 'Enter') amtOk.click(); });
+
+  /* ---------- 复制 ---------- */
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    if (!current) return;
+    var txt = '我抽到 ' + current.label + ' 啦 🐳'
+      + (current.amount ? '（≈ ' + fmtWan(current.amount) + ' tokens）' : '')
+      + '　生日礼物就这个，记得给我充上！';
+    var url = location.href.indexOf('http') === 0 ? location.href : '';
+    if (url) txt += '\n' + url;
+    copy(txt);
+  });
+
+  function copy(txt){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(function(){ toast('复制好啦，发给弟弟吧 ✨'); }, fallback);
+    } else fallback();
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.setAttribute('readonly','');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, txt.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch(e){}
+      document.body.removeChild(ta);
+      toast(ok ? '复制好啦，发给弟弟吧 ✨' : '长按结果手动复制哦');
+    }
+  }
+
+  document.getElementById('againBtn').addEventListener('click', function(){
+    actionsEl.style.display = 'none';
+    resultEl.classList.remove('show');
+    setTimeout(spin, 160);
+  });
+  hub.addEventListener('click', spin);
+
+  /* ---------- toast ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2000);
+  }
+
+  /* ---------- 音效（无外部资源，失败静默） ---------- */
+  var AC = null, muted = false;
+  function ac(){
+    if (muted) return null;
+    try{
+      if (!AC){
+        var C = window.AudioContext || window.webkitAudioContext;
+        if (!C) return null;
+        AC = new C();
+      }
+      if (AC.state === 'suspended') AC.resume();
+      return AC;
+    }catch(e){ return null; }
+  }
+  function blip(freq, vol, dur){
+    var a = ac(); if (!a) return;
+    try{
+      var o = a.createOscillator(), g = a.createGain();
+      o.type = 'triangle'; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+      o.connect(g); g.connect(a.destination);
+      o.start(); o.stop(a.currentTime + dur);
+    }catch(e){}
+  }
+  function fanfare(){
+    var a = ac(); if (!a) return;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function(f,i){
+      setTimeout(function(){ blip(f, 0.10, 0.34); }, i*95);
+    });
+  }
+
+  /* ---------- 撒花 ---------- */
+  var fx = document.getElementById('fx');
+  var fxc = fx.getContext('2d');
+  var parts = [], fxRun = false;
+  function sizeFx(){
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    fx.width = Math.round(innerWidth * dpr);
+    fx.height = Math.round(innerHeight * dpr);
+    fx.style.width = innerWidth + 'px';
+    fx.style.height = innerHeight + 'px';
+    fxc.setTransform(dpr,0,0,dpr,0,0);
+  }
+  function burst(){
+    sizeFx();
+    var colors = ['#ffd479','#ff9ecb','#5ee7c4','#7aa8ff','#ffffff','#ffb03a'];
+    for (var i=0;i<90;i++){
+      parts.push({
+        x: innerWidth/2 + (Math.random()-0.5)*80,
+        y: innerHeight*0.42,
+        vx: (Math.random()-0.5)*11,
+        vy: -6 - Math.random()*10,
+        g: 0.32 + Math.random()*0.16,
+        s: 3 + Math.random()*5,
+        r: Math.random()*Math.PI,
+        vr: (Math.random()-0.5)*0.3,
+        c: colors[(Math.random()*colors.length)|0],
+        life: 1
+      });
+    }
+    if (!fxRun){ fxRun = true; requestAnimationFrame(fxFrame); }
+  }
+  function fxFrame(){
+    fxc.clearRect(0,0,innerWidth,innerHeight);
+    for (var i=parts.length-1;i>=0;i--){
+      var p = parts[i];
+      p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vx *= 0.995;
+      if (p.y > innerHeight + 40 || p.life <= 0){ parts.splice(i,1); continue; }
+      fxc.save();
+      fxc.translate(p.x,p.y); fxc.rotate(p.r);
+      fxc.globalAlpha = Math.max(0, Math.min(1, p.life));
+      fxc.fillStyle = p.c;
+      fxc.fillRect(-p.s/2, -p.s/2, p.s, p.s*0.62);
+      fxc.restore();
+      if (p.y > innerHeight * 0.8) p.life -= 0.02;
+    }
+    if (parts.length){ requestAnimationFrame(fxFrame); }
+    else { fxRun = false; fxc.clearRect(0,0,innerWidth,innerHeight); }
+  }
+
+  /* ---------- 背景泡泡 ---------- */
+  (function bubbles(){
+    var host = document.getElementById('bubbles');
+    var n = window.innerWidth < 420 ? 14 : 20;
+    var html = '';
+    for (var i=0;i<n;i++){
+      var s = 6 + Math.random()*26;
+      html += '<i style="left:' + (Math.random()*100).toFixed(2) + '%;width:' + s.toFixed(0) + 'px;height:' + s.toFixed(0)
+        + 'px;animation-duration:' + (11 + Math.random()*13).toFixed(1) + 's;animation-delay:-'
+        + (Math.random()*20).toFixed(1) + 's;opacity:0"></i>';
+    }
+    host.innerHTML = html;
+  })();
+
+  /* ---------- 尺寸 / 生命周期 ---------- */
+  var rz;
+  function onResize(){ clearTimeout(rz); rz = setTimeout(draw, 120); }
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw).catch(function(){});
+
+  // 首屏：很轻的待机微转（让人一眼看出这盘能转），抽过一次就停
+  draw();
+  var idleTimer = null, idleDone = false;
+  function idleLoop(){
+    if (idleDone) return;
+    if (!spinning && !document.hidden){
+      rot += 0.0022;
+      draw();
+    }
+    idleTimer = setTimeout(idleLoop, 66);   // ~15fps，省电
+  }
+  idleLoop();
+  document.addEventListener('visibilitychange', function(){
+    clearTimeout(idleTimer);
+    if (!document.hidden && !idleDone) idleLoop();
+  });
+
+  // 防双击缩放
+  document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
+})();
+</script>
+</body>
+</html>
+
+
